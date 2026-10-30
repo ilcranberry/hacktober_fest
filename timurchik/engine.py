@@ -1,14 +1,25 @@
-"""Подключение Stockfish и анализ отдельной позиции."""
+"""Connect to Stockfish and analyze a single position."""
 
 import os
+import shutil
+from pathlib import Path
 
 import chess
 import chess.engine
 
 
 def open_engine() -> chess.engine.SimpleEngine:
-    """Запустить Stockfish. Путь можно задать через STOCKFISH_PATH."""
-    path = os.getenv("STOCKFISH_PATH", "stockfish")
+    """Find Stockfish using STOCKFISH_PATH, PATH, or the local stockfish folder."""
+    path = os.getenv("STOCKFISH_PATH") or shutil.which("stockfish")
+    if not path:
+        folder = Path(__file__).resolve().parents[1] / "stockfish"
+        pattern = "stockfish*.exe" if os.name == "nt" else "stockfish*"
+        local_binary = next(
+            (file for file in sorted(folder.rglob(pattern))
+             if file.is_file() and (os.name == "nt" or os.access(file, os.X_OK))),
+            None,
+        )
+        path = str(local_binary) if local_binary else "stockfish"
     return chess.engine.SimpleEngine.popen_uci(path)
 
 
@@ -17,21 +28,19 @@ def analyze_position(
     board: chess.Board,
     time_limit: float = 0.1,
 ) -> dict:
-    """Оценить позицию со стороны белых и найти лучший ход."""
+    """Evaluate the position from White's perspective and find the best move."""
     if time_limit <= 0:
-        raise ValueError("Время анализа должно быть больше нуля.")
+        raise ValueError("Analysis time must be greater than zero.")
 
     info = engine.analyse(
         board,
         chess.engine.Limit(time=time_limit),
     )
 
-    # Stockfish может возвращать оценку со стороны ходящего.
-    # Всегда приводим её к точке зрения белых.
+    # Convert the engine's score to White's perspective regardless of whose turn it is.
     score = info["score"].pov(chess.WHITE)
 
-    # PV — лучшее продолжение, найденное движком.
-    # В завершённой позиции продолжение может отсутствовать.
+    # The principal variation can be empty in a finished position.
     continuation = info.get("pv", [])
     best_move = continuation[0] if continuation else None
 
@@ -40,4 +49,5 @@ def analyze_position(
         "mate": score.mate(),
         "best_move_uci": best_move.uci() if best_move else None,
         "best_move_san": board.san(best_move) if best_move else None,
+        "pv_uci": [move.uci() for move in continuation[:6]],
     }

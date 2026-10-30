@@ -1,10 +1,10 @@
-"""Перевод оценок в вероятность победы и классификация ходов."""
+"""Convert evaluations to win probabilities and classify moves."""
 
 import math
 
 
-# Начальные пороги для MVP. Позже проверим их на реальных партиях.
-# Потеря вероятности: 0.03 означает 3 процентных пункта.
+# Initial MVP thresholds, to be calibrated on real games.
+# A probability loss of 0.03 means three percentage points.
 THRESHOLDS = (
     (0.01, "excellent"),
     (0.03, "good"),
@@ -14,8 +14,8 @@ THRESHOLDS = (
 
 
 def win_probability(eval_cp: float) -> float:
-    """Приблизительная вероятность победы белых из оценки в сантипешках."""
-    # Ограничение защищает math.exp от переполнения.
+    """Estimate White's win probability from an evaluation in centipawns."""
+    # Clamp the score to prevent overflow in math.exp.
     bounded_cp = max(-10000, min(10000, eval_cp))
     return 1 / (1 + math.exp(-0.00368208 * bounded_cp))
 
@@ -26,7 +26,7 @@ def classify_move(
     mover_is_white: bool,
     is_best_move: bool = False,
 ) -> str:
-    """Определить метку по потере вероятности ходившего игрока."""
+    """Classify a move by the mover's loss in win probability."""
     if is_best_move:
         return "best"
 
