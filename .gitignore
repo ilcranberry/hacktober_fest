@@ -206,6 +206,10 @@ cython_debug/
 tempCodeRunnerFile.py
 
 # Ruff stuff:
+.conda/
+models/
+stockfish/
+stockfish*.exe
 .ruff_cache/
 
 # PyPI configuration file
