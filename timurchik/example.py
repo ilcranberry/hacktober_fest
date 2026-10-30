@@ -1,4 +1,4 @@
-"""Проверка анализа партии."""
+"""Run a sample analysis: python -m timurchik.example."""
 
 from timurchik.analyzer import analyze
 
@@ -13,7 +13,7 @@ PGN = """
 
 
 def show_progress(done: int, total: int):
-    print(f"Анализ: {done}/{total}")
+    print(f"Analysis: {done}/{total}")
 
 
 def main():
@@ -21,15 +21,15 @@ def main():
 
     for item in results:
         if item["mate_after"] is not None:
-            evaluation = f"мат: {item['mate_after']}"
+            evaluation = f"mate: {item['mate_after']}"
         else:
             evaluation = f"{item['eval_after'] / 100:+.2f}"
 
         print(
             f"{item['ply']:>2}. {item['move_san']:<7}"
             f" {item['label']:<12}"
-            f" оценка: {evaluation};"
-            f" лучший: {item['best_move_san']}"
+            f" evaluation: {evaluation};"
+            f" best: {item['best_move_san']}"
         )
 
 

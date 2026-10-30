@@ -2,22 +2,24 @@
 
 An open-source chess game review app powered by Stockfish and local AI.
 
-Paste a Lichess game URL or a PGN, step through the game, and get move classifications with short, plain-language explanations.
+Paste a PGN, step through the game, and get move classifications with short explanations of verified consequences. Lichess URL import is planned; export the game as PGN for now.
 
 Built during Hacktoberfest Hack Day using Python, Stockfish, Gemma, Ollama, and Gradio.
 
 ## Features
 
-- Import games using a Lichess URL or pasted PGN.
+- Import games using pasted PGN.
 - Review games exported from Chess.com through PGN.
 - Navigate an interactive chessboard move by move.
 - See Stockfish evaluations and best-move suggestions.
 - Get move labels: Best, Excellent, Good, Inaccuracy, Mistake, and Blunder.
-- Read short explanations based on verified analysis.
+- Get explanations automatically when navigating with Next or Previous; revisiting a move uses its cached explanation.
+- Read verified reasons such as exposed king diagonals, captures, mate threats, development, and central square coverage.
+- See the actual explanation source: Ollama, Template, or Provided.
 - Use template-based explanations when Ollama is unavailable.
 - Run analysis and explanation generation locally, without paid APIs.
 
-Downloading dependencies and models, and importing games from Lichess, require internet access.
+Downloading dependencies and models requires internet access. Analysis and inference run locally.
 
 ## How It Works
 
@@ -95,7 +97,7 @@ Windows PowerShell example — replace the path with your installation:
 $env:STOCKFISH_PATH = "C:\path\to\stockfish.exe"
 ```
 
-If the variable is unset, the analyzer looks for `stockfish` on the system `PATH`.
+If the variable is unset, the analyzer looks for `stockfish` on the system `PATH`, then for an executable extracted into the repository's `stockfish/` directory. `STOCKFISH_PATH` takes precedence. The local directory and its binaries are ignored by Git.
 
 ### 4. Set up Ollama
 
@@ -129,7 +131,25 @@ Windows PowerShell:
 $env:OLLAMA_MODEL = "gemma3:1b"
 ```
 
-The local Ollama endpoint is `http://localhost:11434`.
+The default local Ollama endpoint is `http://127.0.0.1:11434`.
+The app checks `/api/tags` once per analysis to confirm that the selected model is installed.
+If Ollama or the selected model is unavailable, templates are used immediately.
+After a failed or rejected model response, the remaining explanations for that game use templates.
+Uncheck **Use local Ollama model when available** for template-only mode.
+
+For a portable standalone runtime extracted into `models/ollama`, use a separate PowerShell terminal:
+
+```powershell
+$env:OLLAMA_MODELS = "$PWD\models\weights"
+$env:OLLAMA_HOST = '127.0.0.1:11434'
+$env:OLLAMA_NO_CLOUD = '1'
+.\models\ollama\ollama.exe serve
+```
+
+Keep that terminal open. In a second terminal, use
+`.\models\ollama\ollama.exe pull gemma3:1b` and
+`.\models\ollama\ollama.exe list` instead of the global `ollama` command.
+Runtime files and weights under `models/` are ignored by Git.
 
 ## Run the App
 
@@ -148,15 +168,42 @@ On Windows, you can also run:
 Open the local URL printed in the terminal, usually:
 http://127.0.0.1:7860
 
-Press `Ctrl+C` to stop the server.
+Press `Ctrl+C` to stop the server. You can also run `nikitosik/app.py` directly.
+
+If this workspace already has a `.conda` environment:
+
+```powershell
+.\.conda\python.exe -m pip install -r requirements.txt
+.\.conda\python.exe app.py
+```
 
 ## Review a Game
 
-1. Paste a Lichess game URL or the full PGN text.
-2. Click **Load / analyze**.
+1. Paste the full PGN text, or click **Example game** to fill the input.
+2. Click **Analyze game**.
 3. Wait for analysis to complete.
 4. Use **Previous**, **Next**, and **Go to start** to navigate.
-5. Review the classification, best-move suggestion, and explanation for each move.
+5. Read the classification, evaluation before and after the move, best move, and explanation.
+
+Explanations for inaccuracies, mistakes, blunders, and brilliant moves are generated during analysis.
+Other moves are explained automatically when selected with **Next** or **Previous**.
+All explanations are cached for the current game. Controls are disabled during generation
+and restored after success or failure. If analysis fails, the previous game remains available.
+Use **Analysis settings** to set the time per position (default: 0.1 seconds).
+
+### Explanation evidence
+
+`timurchik/facts.py` validates and replays up to six half-moves of Stockfish's actual principal
+variation. It records captures, legal recaptures, checks, mate, double attacks, opened king
+diagonals, castling pawn cover, development, and central square coverage. Mate defenses in
+an alternative line are verified as legal moves. Pinned pieces are not presented as working forks.
+
+Gemma chooses readable wording from fact-derived alternatives. Its answer is validated
+against those alternatives; template fallback uses the same evidence. Neither the model
+nor the UI evaluates positions or invents strategic reasons. A possible attack is not called
+a guaranteed material win, and a short engine line is not treated as proof of a full game result.
+When no concrete consequence is verified, the explanation says so.
+The card includes the engine continuation so the explanation can be checked.
 
 ### Example PGN
 
@@ -176,11 +223,13 @@ Text exported from Chess.com with headers such as `[Event "..."]` and a move lis
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `STOCKFISH_PATH` | `stockfish` | Stockfish executable path |
-| `OLLAMA_MODEL` | `gemma3:1b` | Installed Ollama model tag |
-| `time_limit` | `0.1` seconds | Stockfish analysis time per position; Python API argument |
+| `STOCKFISH_PATH` | PATH or local `stockfish/` | Explicit Stockfish executable path |
+| `OLLAMA_MODEL` | `gemma3:1b` | Exact installed Ollama model tag |
+| `OLLAMA_HOST` | `http://127.0.0.1:11434` | Local Ollama server URL |
+| `OLLAMA_TIMEOUT` | `20` seconds | Timeout for one generation request |
+| `time_limit` | `0.1` seconds | Stockfish time per position; UI slider or Python API argument |
 
-Environment variables must be set in the terminal used to launch the app.
+Environment variables must be set in the terminal used to launch the app. Restart Gradio after changing them; analyze the game again after starting Ollama or installing a model.
 
 ## Stockfish Module
 
@@ -220,7 +269,7 @@ results = analyze(
 )
 ```
 
-The analyzer accepts PGN text, not a URL. URL fetching is handled by the application input layer.
+The analyzer accepts PGN text. URL fetching is not connected yet.
 
 ### Result Format
 
@@ -246,7 +295,7 @@ All evaluations use White's perspective:
 - Positive mate scores favor White; negative scores favor Black.
 - A mate score of `0` means checkmate has already occurred. The corresponding board position identifies the winner.
 
-The analyzer initially returns `facts={}` and `explanation=None`. These fields are populated by the other application modules.
+The analyzer populates `facts` with verified board and continuation facts, and initially returns `explanation=None`. The UI fills explanations eagerly or on navigation. The outer result contract is unchanged. The existing `explain_move(move, use_llm=True) -> str` API is preserved; the UI uses `explain_move_with_source` to report the actual source.
 
 ## Project Structure
 
@@ -258,12 +307,17 @@ timurchik/
     __init__.py
     engine.py           # Stockfish connection and position analysis
     labels.py           # Evaluation conversion and move classification
+    facts.py            # Verified board facts and engine continuation replay
     analyzer.py         # PGN analysis pipeline
     example.py          # Standalone analysis example
 explain/
     prompts.py          # Grounded explanation instructions
     explainer.py        # Ollama integration and template fallback
+    reasons.py          # Fact-derived explanation wording
     test_explainer.py
+tests/
+    test_ui_core.py     # UI/core/explainer integration checks
+    test_facts.py       # Tactical fact and explanation regressions
 requirements.txt
 README.md
 LICENSE
@@ -277,6 +331,25 @@ LICENSE
 - The Brilliant label is outside the current MVP.
 - Chess.com games are supported through pasted PGN, not direct URL import.
 - Increasing analysis time improves search depth but slows down game review.
+
+## Verification
+
+```powershell
+.\.conda\python.exe -m unittest discover -s tests -v
+.\.conda\python.exe -m unittest explain.test_explainer -v
+.\.conda\python.exe -m timurchik.example
+```
+
+Replace `.\.conda\python.exe` with your environment's Python executable as needed.
+Unit tests run without Stockfish or Ollama. To include the real Stockfish integration test,
+set `$env:RUN_STOCKFISH_TESTS = '1'` before running the first command.
+The standalone example requires Stockfish. `python -m explain.explainer` demonstrates
+an explanation using Stockfish and Ollama, with template fallback if Ollama is unavailable.
+
+Tests cover automatic explanation generation on navigation, caching, game boundaries,
+source reporting, rejected model responses, exposed king diagonals, immediate mate and
+its avoidance, queen captures, pinned defenders, castling, promotion, en passant,
+and invalid engine continuations.
 
 ## License
 
