@@ -1,6 +1,6 @@
 # Open ChessReviewer
 
-A local, open-source chess game review app powered by Stockfish and Gemma.
+A local, open-source chess game review app powered by Stockfish and Gemma 4 E4B (`gemma4:e4b`).
 
 Paste a Lichess game URL or PGN, step through the game, and review move classifications with short explanations based on verified chess facts.
 
@@ -15,7 +15,7 @@ Built during Hacktoberfest Hack Day.
 - View Stockfish's recommended move and continuation.
 - Get move labels: Best, Excellent, Good, Inaccuracy, Mistake, and Blunder.
 - Read explanations generated from verified analysis facts.
-- Use local Gemma through Ollama, with automatic template fallback.
+- Use local Gemma 4 E4B through Ollama, with automatic template fallback.
 - Adjust Stockfish analysis time in the UI.
 
 Analysis and explanation generation run locally. No paid APIs or subscriptions are required.
@@ -123,8 +123,9 @@ ollama pull gemma4:e4b
 ollama list
 ```
 
+The default model is Gemma 4 E4B, with the exact Ollama tag `gemma4:e4b`.
 The configured model must match an installed model tag exactly. Requests use `think: false` and `stream: false` for direct structured responses.
-For lower memory use, an installed `gemma3:1b` can still be selected with `OLLAMA_MODEL`.
+To select another installed model, set `OLLAMA_MODEL` to its exact tag.
 
 ## Run the App
 
@@ -201,6 +202,14 @@ For example, on macOS or Linux:
 export OLLAMA_MODEL=gemma4:e4b
 export OLLAMA_HOST=http://127.0.0.1:11434
 export OLLAMA_TIMEOUT=60
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:OLLAMA_MODEL = "gemma4:e4b"
+$env:OLLAMA_HOST = "http://127.0.0.1:11434"
+$env:OLLAMA_TIMEOUT = "60"
 ```
 
 Restart the app after changing its environment settings.
