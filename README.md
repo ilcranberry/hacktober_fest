@@ -39,7 +39,7 @@ Explanations for important mistakes are prepared during analysis. Other moves ar
 - Python 3.10+
 - Stockfish installed separately
 - Python dependencies from `requirements.txt`
-- Ollama with `gemma3:1b` for AI-assisted explanations
+- Ollama with `gemma4:e4b` for AI-assisted explanations
 
 Ollama is optional: the app can use template explanations.
 
@@ -119,11 +119,12 @@ ollama serve
 Download the default model:
 
 ```bash
-ollama pull gemma3:1b
+ollama pull gemma4:e4b
 ollama list
 ```
 
-The configured model must match an installed model tag exactly.
+The configured model must match an installed model tag exactly. Requests use `think: false` and `stream: false` for direct structured responses.
+For lower memory use, an installed `gemma3:1b` can still be selected with `OLLAMA_MODEL`.
 
 ## Run the App
 
@@ -187,9 +188,9 @@ PGN exported from Chess.com can be pasted directly. Direct Chess.com URL import 
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `STOCKFISH_PATH` | Automatic discovery | Path to the Stockfish executable |
-| `OLLAMA_MODEL` | `gemma3:1b` | Installed Ollama model tag |
+| `OLLAMA_MODEL` | `gemma4:e4b` | Installed Ollama model tag |
 | `OLLAMA_HOST` | `http://127.0.0.1:11434` | Ollama server address |
-| `OLLAMA_TIMEOUT` | `20` seconds | Timeout for one generation request |
+| `OLLAMA_TIMEOUT` | `60` seconds | Timeout for one generation request, including cold model loading |
 | `time_limit` | `0.1` seconds | Stockfish analysis time per position |
 
 Set environment variables in the terminal used to launch the app.
@@ -197,9 +198,9 @@ Set environment variables in the terminal used to launch the app.
 For example, on macOS or Linux:
 
 ```bash
-export OLLAMA_MODEL=gemma3:1b
+export OLLAMA_MODEL=gemma4:e4b
 export OLLAMA_HOST=http://127.0.0.1:11434
-export OLLAMA_TIMEOUT=20
+export OLLAMA_TIMEOUT=60
 ```
 
 Restart the app after changing its environment settings.
