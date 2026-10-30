@@ -7,6 +7,10 @@ import re
 import sys
 from pathlib import Path
 
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
+
 # Keep both entry points working: python app.py and python nikitosik/app.py.
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -28,6 +32,74 @@ LABELS = {
 }
 KEY_LABELS = {"inaccuracy", "mistake", "blunder", "brilliant"}
 
+def resolve_pgn(text: str) -> str:
+    """Return pasted PGN or download a game from a Lichess URL."""
+    source = (text or "").strip()
+
+    if not source:
+        raise ValueError("Paste a Lichess game URL or PGN text.")
+
+    if source.startswith(("lichess.org/", "www.lichess.org/")):
+        source = "https://" + source
+
+    if not source.lower().startswith(("https://", "http://")):
+        return source
+
+    parsed = urlsplit(source)
+
+    if parsed.hostname not in {"lichess.org", "www.lichess.org"}:
+        raise ValueError(
+            "Only Lichess game links are supported. "
+            "For Chess.com, paste PGN."
+        )
+
+    match = re.fullmatch(
+        r"/(?:game/)?([A-Za-z0-9]{8})(?:[A-Za-z0-9]{4})?(?:/(?:white|black))?/?",
+        parsed.path,
+    )
+
+    if not match:
+        raise ValueError(
+            "Paste a link to a single Lichess game, not a study or profile."
+        )
+
+    game_id = match.group(1)
+
+    request = Request(
+        f"https://lichess.org/game/export/{game_id}",
+        headers={
+            "Accept": "application/x-chess-pgn",
+            "User-Agent": "OpenChessReviewer/0.1",
+        },
+    )
+
+    try:
+        with urlopen(request, timeout=15) as response:
+            pgn = response.read().decode("utf-8-sig")
+    except HTTPError as exc:
+        if exc.code == 404:
+            raise ValueError(
+                "Lichess game not found or unavailable. Try pasting PGN."
+            ) from exc
+
+        if exc.code == 429:
+            raise ValueError(
+                "Too many Lichess requests. Try again later or paste PGN."
+            ) from exc
+
+        raise ValueError(
+            f"Lichess returned HTTP {exc.code}. Try pasting PGN."
+        ) from exc
+    except (URLError, OSError) as exc:
+        raise ValueError(
+            "Could not connect to Lichess. "
+            "Check your connection or paste PGN."
+        ) from exc
+
+    if not pgn.strip():
+        raise ValueError("Lichess returned an empty game.")
+
+    return pgn
 
 def parse_game(text):
     """Validate one pasted PGN, preserving its initial FEN."""
@@ -122,13 +194,18 @@ def load_game(text, time_limit=0.1, use_llm=True, progress=gr.Progress()):
     try:
         if not math.isfinite(time_limit) or time_limit <= 0:
             raise ValueError("Analysis time must be a positive, finite number.")
-        progress(0, desc="Reading PGN")
-        game = parse_game(text)
+        progress(0, desc="Loading game")
+        pgn = resolve_pgn(text)
+        game = parse_game(pgn)
 
         def report_progress(done, total):
             progress(0.8 * done / total, desc=f"Stockfish: half-move {done} / {total}")
 
-        rows = analyze(text, time_limit=time_limit, progress_callback=report_progress)
+        rows = analyze(
+            pgn,
+            time_limit=time_limit,
+            progress_callback=report_progress,
+        )
         if len(rows) != len(game["moves"]):
             raise ValueError("The analysis returned an incorrect number of half-moves.")
         for i, row in enumerate(rows):
@@ -182,7 +259,11 @@ def build_app():
         state = gr.State(empty)
         index = gr.State(0)
         gr.Markdown("# ♟ Open Chess Review\nReview your chess game, move by move. Runs locally with Gradio.")
-        source = gr.Textbox(label="Game PGN", lines=5, placeholder="1. e4 e5 2. Nf3 Nc6 …")
+        source = gr.Textbox(
+            label="Lichess URL or PGN",
+            lines=5,
+            placeholder="https://lichess.org/... or paste PGN",
+        )
         with gr.Accordion("Analysis settings", open=False):
             time_limit = gr.Slider(
                 minimum=0.05, maximum=0.5, step=0.05, value=0.1,
@@ -196,7 +277,9 @@ def build_app():
         with gr.Row():
             example = gr.Button("Example game")
             load = gr.Button("Analyze game", variant="primary")
-        status = gr.Markdown("Paste a PGN or load the example game.")
+        status = gr.Markdown(
+            "Paste a Lichess game URL or PGN, or load the example game."
+        )
         with gr.Row():
             with gr.Column():
                 board = gr.HTML(svg)
