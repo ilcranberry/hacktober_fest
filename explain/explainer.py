@@ -23,7 +23,7 @@ LABELS = {
 
 def ollama_model() -> str:
     """Return the configured local model tag."""
-    return os.getenv("OLLAMA_MODEL", "gemma3:1b")
+    return os.getenv("OLLAMA_MODEL", "gemma4:e4b")
 
 
 def _ollama_url(endpoint: str) -> str:
@@ -78,6 +78,7 @@ def _ask_ollama(options: list[str]) -> str | None:
         "model": ollama_model(),
         "prompt": build_prompt(options),
         "stream": False,
+        "think": False,
         "options": {"temperature": 0, "num_predict": 180, "num_ctx": 1024},
         "format": {
             "type": "object",
@@ -90,7 +91,7 @@ def _ask_ollama(options: list[str]) -> str | None:
     }
 
     try:
-        timeout = float(os.getenv("OLLAMA_TIMEOUT", "20"))
+        timeout = float(os.getenv("OLLAMA_TIMEOUT", "60"))
         if not math.isfinite(timeout) or timeout <= 0:
             return None
         request = Request(

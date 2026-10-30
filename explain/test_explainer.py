@@ -33,12 +33,22 @@ class ExplainerTests(unittest.TestCase):
             self.assertEqual(explain_move_with_source(MOVE), (approved, "ollama"))
 
     def test_availability_checks_the_selected_installed_tag(self):
-        tags = {"models": [{"name": "gemma3:1b"}, {"name": "gemma3:latest"}]}
-        for requested, expected in [("gemma3:1b", True), ("gemma3", True), ("gemma3:4b", False)]:
+        tags = {"models": [{"name": "gemma4:e4b"}, {"name": "gemma4:latest"}, {"name": "gemma3:1b"}]}
+        for requested, expected in [("gemma4:e4b", True), ("gemma4", True), ("gemma4:e2b", False), ("gemma3:1b", True)]:
             with self.subTest(model=requested):
                 with patch.dict(os.environ, {"OLLAMA_MODEL": requested}):
                     with patch("explain.explainer.urlopen", return_value=io.BytesIO(json.dumps(tags).encode())):
                         self.assertEqual(ollama_available(), expected)
+
+    def test_gemma4_request_disables_thinking_and_streaming(self):
+        approved = "The analysis labels Nf3 as Mistake. Stockfish recommends Nc3."
+        with patch.dict(os.environ, {"OLLAMA_MODEL": "gemma4:e4b"}):
+            with patch("explain.explainer.urlopen", return_value=fake_response(json.dumps({"explanation": approved}))) as request:
+                self.assertEqual(explain_move(MOVE), approved)
+        payload = json.loads(request.call_args.args[0].data)
+        self.assertEqual(payload["model"], "gemma4:e4b")
+        self.assertIs(payload["think"], False)
+        self.assertIs(payload["stream"], False)
 
     def test_offline_and_timeout_use_fallback(self):
         expected = explain_move(MOVE, use_llm=False)
